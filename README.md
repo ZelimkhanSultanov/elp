@@ -1,4 +1,4 @@
-# elp
+# elp Ӏ
 Low-level global key interceptor which replaces backslash in russian keyboard layout to Chechen 'I' letter
 
 Программа для подмены "\" на русской раскладке на чеченскую букву Ӏ.
