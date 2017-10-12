@@ -26,46 +26,60 @@ class InterceptKeys
     private static string thisLocation = Assembly.GetEntryAssembly().Location;
     private static string thisDirectory = Path.GetDirectoryName(thisLocation) + "\\";
     private static string thisProcessname = Process.GetCurrentProcess().ProcessName;
-    public static string thisFilePath = Path.Combine(thisDirectory, thisProcessname + ".exe");
+    private static string thisFilePath = Path.Combine(thisDirectory, thisProcessname + ".exe");
 
-    public static string installDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\Elp\\";
+    private static string fileName = Process.GetCurrentProcess().ProcessName + ".exe";
+    private static string shortcutFileName = Application.ProductName + ".lnk";
+    private static string installDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\Elp\\";
 
-    [DllImport("shell32.dll")]
-    static extern bool SHGetSpecialFolderPath(IntPtr hwndOwner, [Out] StringBuilder lpszPath, int nFolder, bool fCreate);
-    const int CSIDL_COMMON_STARTMENU = 0x16;  // All Users\Start Menu
-    public static string fileName = Process.GetCurrentProcess().ProcessName + ".exe";
-    //    public static string aStartUpDirPath = "";
-    public static string cStartUpDirPath = "";
-    private static string realPath = "";
+    public static string myStartUpDirPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "\\";
 
-    private static void copyFiles()
+
+    private static bool isInstalled()
     {
+        return (new DirectoryInfo(installDir).Exists
+            && new FileInfo(installDir + fileName).Exists
+            && new FileInfo(installDir + "WindowsInput.xml").Exists
+            && new FileInfo(installDir + "WindowsInput.dll").Exists);
+    }
+
+    private static void removeFiles()
+    {
+        try {
+            System.IO.File.Delete(installDir + fileName);
+            System.IO.File.Delete(installDir + "WindowsInput.xml");
+            System.IO.File.Delete(installDir + "WindowsInput.dll");
+            System.IO.File.Delete(myStartUpDirPath + shortcutFileName);
+        } catch (Exception) {
+            MessageBox.Show("Возникла ошибка при удалении файлов");
+        }
+    }
+
+    private static bool install()
+    {
+        try { new DirectoryInfo(installDir).Create(); } catch (Exception) { }
         try {
             System.IO.File.Copy(thisDirectory + fileName, installDir + fileName, true);
             System.IO.File.Copy(thisDirectory + "WindowsInput.xml", installDir + "WindowsInput.xml", true);
             System.IO.File.Copy(thisDirectory + "WindowsInput.dll", installDir + "WindowsInput.dll", true);
-            CreateStartupFolderShortcut();
-        } catch (Exception ex) {
+            CreateStartupFolderShortcut(myStartUpDirPath + "\\" + shortcutFileName, installDir + fileName);
+            return true;
+        } catch (Exception) {
             MessageBox.Show("Возникла ошибка при копировании файлов");
-            MessageBox.Show(ex.Message);
+            return false;
         }
     }
 
-    public static void CreateStartupFolderShortcut()
+    public static void CreateStartupFolderShortcut(string pShortcutPath, string pTargetPath)
     {
         WshShellClass wshShell = new WshShellClass();
-        IWshRuntimeLibrary.IWshShortcut shortcut;
-        string startUpFolderPath =
-          Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+        IWshShortcut shortcut;
 
         // Create the shortcut
-        shortcut =
-          (IWshRuntimeLibrary.IWshShortcut)wshShell.CreateShortcut(
-            startUpFolderPath + "\\" +
-            Application.ProductName + ".lnk");
+        shortcut = (IWshShortcut)wshShell.CreateShortcut(pShortcutPath);
 
-        shortcut.TargetPath = Application.ExecutablePath;
-        shortcut.WorkingDirectory = Application.StartupPath;
+        shortcut.TargetPath = pTargetPath;     
+        shortcut.WorkingDirectory = Path.GetDirectoryName(pTargetPath);
         shortcut.Description = "Elp I Autostart";
         // shortcut.IconLocation = Application.StartupPath + @"\App.ico";
         shortcut.Save();
@@ -73,75 +87,63 @@ class InterceptKeys
 
     public static void Main()
     {
-        DirectoryInfo di = new System.IO.DirectoryInfo(installDir);
-        if (!di.Exists) di.Create();
-
-
-        /* StringBuilder path = new StringBuilder(260);
-         SHGetSpecialFolderPath(IntPtr.Zero, path, CSIDL_COMMON_STARTMENU, false);
-       //  aStartUpDirPath = path.ToString() + "\\";
-       */
-        cStartUpDirPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "\\";
-        
-
-
-        mInputSimulator = new InputSimulator();
-
-        // Is it should be updated?
-        // Look if there is any existing copy of the application
-
-        //  if (new FileInfo(aStartUpDirPath + fileName).Exists) {
-        //       realPath = aStartUpDirPath + fileName;
-        //   } else 
-
-        if (new FileInfo(cStartUpDirPath + fileName).Exists) {
-            realPath = cStartUpDirPath + fileName;
-        }
-
-        if (!realPath.Equals("")) {
-            var versionInfo = FileVersionInfo.GetVersionInfo(realPath);
-            int exVersionMajor = versionInfo.FileMajorPart;
-            int exVersionMinor = versionInfo.FileMinorPart;
-
-            versionInfo = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
-            int myVersionMajor = versionInfo.FileMajorPart;
-            int myVersionMinor = versionInfo.FileMinorPart;
-
-            if (myVersionMajor > exVersionMajor || (myVersionMajor == exVersionMajor && myVersionMinor > exVersionMinor)) {
-                // Must update
-                foreach (var process in Process.GetProcessesByName("elp")) {
-                    if (process.Id != Process.GetCurrentProcess().Id)
-                        process.Kill();
-                }
-
-                System.IO.File.Delete(realPath);
-                copyFiles();
-            }
-        }
-
-
+        // Allow only one instance
         using (Mutex mutex = new Mutex(false, "Global\\" + appGuid)) {
             if (!mutex.WaitOne(0, false)) {
                 MessageBox.Show("Программа уже работает!");
                 return;
             }
-            // It's the first time
-            if (realPath.Equals("")) {
-                copyFiles();
-                MessageBox.Show("Программа запущена и успешно установлена в автозапуск для текущего пользователя!");
+
+            mInputSimulator = new InputSimulator();
+
+            if (!isInstalled()) {
+                // New installation
+                install();
+
+                MessageBox.Show("Программа запущена и успешно установлена в автозапуск!", "Elp I", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _hookID = SetHook(_proc);
                 Application.Run();
             } else {
+                // Already installed
+
+                // Check if it should be updated
+
+                // Old version
+                var versionInfo = FileVersionInfo.GetVersionInfo(installDir + fileName);
+                int exVersionMajor = versionInfo.FileMajorPart;
+                int exVersionMinor = versionInfo.FileMinorPart;
+
+                // New version
+                versionInfo = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
+                int myVersionMajor = versionInfo.FileMajorPart;
+                int myVersionMinor = versionInfo.FileMinorPart;
+
+                if (myVersionMajor > exVersionMajor || (myVersionMajor == exVersionMajor && myVersionMinor > exVersionMinor)) {
+                    // Must update
+                    foreach (var process in Process.GetProcessesByName("elp")) {
+                        if (process.Id != Process.GetCurrentProcess().Id)
+                            process.Kill();
+                    }
+
+                    // Update to new version
+                    removeFiles();
+                    if (install()) {
+                        MessageBox.Show("Программа успешно обновлена", "Elp I", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+
+
+                if (new FileInfo(myStartUpDirPath + shortcutFileName).Exists) {
+                    // Shortcut has already been installed
+                }
+
                 _hookID = SetHook(_proc);
                 Application.Run();
             }
             UnhookWindowsHookEx(_hookID);
         }
     }
-
-
-
-
+    
     private static IntPtr SetHook(LowLevelKeyboardProc proc)
     {
         using (Process curProcess = Process.GetCurrentProcess())
@@ -171,7 +173,6 @@ class InterceptKeys
 
         return CallNextHookEx(_hookID, nCode, wParam, lParam);
     }
-
 
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, IntPtr proccess);
