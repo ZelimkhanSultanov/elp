@@ -10,7 +10,7 @@ using WindowsInput;
 using WindowsInput.Native;
 using Elp;
 using System.Text;
-using System.Security.Permissions;
+using IWshRuntimeLibrary;
 
 class InterceptKeys
 {
@@ -28,6 +28,8 @@ class InterceptKeys
     private static string thisProcessname = Process.GetCurrentProcess().ProcessName;
     public static string thisFilePath = Path.Combine(thisDirectory, thisProcessname + ".exe");
 
+    public static string installDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\Elp\\";
+
     [DllImport("shell32.dll")]
     static extern bool SHGetSpecialFolderPath(IntPtr hwndOwner, [Out] StringBuilder lpszPath, int nFolder, bool fCreate);
     const int CSIDL_COMMON_STARTMENU = 0x16;  // All Users\Start Menu
@@ -39,17 +41,41 @@ class InterceptKeys
     private static void copyFiles()
     {
         try {
-            File.Copy(thisDirectory + fileName, cStartUpDirPath + fileName, true);
-            File.Copy(thisDirectory + "WindowsInput.xml", cStartUpDirPath + "WindowsInput.xml", true);
-            File.Copy(thisDirectory + "WindowsInput.dll", cStartUpDirPath + "WindowsInput.dll", true);
+            System.IO.File.Copy(thisDirectory + fileName, installDir + fileName, true);
+            System.IO.File.Copy(thisDirectory + "WindowsInput.xml", installDir + "WindowsInput.xml", true);
+            System.IO.File.Copy(thisDirectory + "WindowsInput.dll", installDir + "WindowsInput.dll", true);
+            CreateStartupFolderShortcut();
         } catch (Exception ex) {
             MessageBox.Show("Возникла ошибка при копировании файлов");
             MessageBox.Show(ex.Message);
         }
     }
 
+    public static void CreateStartupFolderShortcut()
+    {
+        WshShellClass wshShell = new WshShellClass();
+        IWshRuntimeLibrary.IWshShortcut shortcut;
+        string startUpFolderPath =
+          Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+
+        // Create the shortcut
+        shortcut =
+          (IWshRuntimeLibrary.IWshShortcut)wshShell.CreateShortcut(
+            startUpFolderPath + "\\" +
+            Application.ProductName + ".lnk");
+
+        shortcut.TargetPath = Application.ExecutablePath;
+        shortcut.WorkingDirectory = Application.StartupPath;
+        shortcut.Description = "Elp I Autostart";
+        // shortcut.IconLocation = Application.StartupPath + @"\App.ico";
+        shortcut.Save();
+    }
+
     public static void Main()
     {
+        DirectoryInfo di = new System.IO.DirectoryInfo(installDir);
+        if (!di.Exists) di.Create();
+
 
         /* StringBuilder path = new StringBuilder(260);
          SHGetSpecialFolderPath(IntPtr.Zero, path, CSIDL_COMMON_STARTMENU, false);
@@ -57,6 +83,7 @@ class InterceptKeys
        */
         cStartUpDirPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup) + "\\";
         
+
 
         mInputSimulator = new InputSimulator();
 
@@ -87,7 +114,7 @@ class InterceptKeys
                         process.Kill();
                 }
 
-                File.Delete(realPath);
+                System.IO.File.Delete(realPath);
                 copyFiles();
             }
         }
