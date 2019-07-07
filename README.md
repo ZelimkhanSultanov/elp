@@ -1,6 +1,4 @@
 # elp Ӏ
-Low-level global key interceptor which replaces backslash in russian keyboard layout to Chechen 'I' letter
-
 Программа для подмены "\" на русской раскладке на чеченскую букву Ӏ.
 Так как данная буква не входит в состав стандартных символов ANSI, текст содержащий её должен быть в кодировке поддерживающей Unicode (MS Word и тп не требуют никаких настроек)
 
@@ -16,3 +14,4 @@ Low-level global key interceptor which replaces backslash in russian keyboard la
 
 Тех. поддержка: bekaev.movsar@gmail.com
 Сайт программы: 
+http://ps95.ru/
